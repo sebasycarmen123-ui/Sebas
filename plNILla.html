@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Planilla de Notas</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f9ff; }
+    table { border-collapse: collapse; margin: 20px auto; width: 95%; }
+    th, td { border: 1px solid #333; padding: 4px; text-align: center; }
+    th { background: #4a90e2; color: white; }
+    caption { font-weight: bold; margin: 10px; font-size: 1.2em; }
+    input[type=number] { width: 50px; text-align: center; }
+    .final { font-weight: bold; }
+    .resumen { font-weight: bold; }
+    .verde { background: #b6ffb6; }
+    .amarillo { background: #fff7b6; }
+    .rojo { background: #ffb6b6; }
+    .botones { text-align:center; margin:20px; }
+    .botones button { padding:10px 20px; margin:5px; font-size:16px; cursor:pointer; }
+  </style>
+</head>
+<body>
+
+<script>
+// Función para calcular promedio de un grupo de inputs
+function promedioNotas(inputs) {
+  let total = 0, count = 0;
+  inputs.forEach(inp => {
+    if (inp && inp.value !== "") {
+      total += parseFloat(inp.value);
+      count++;
+    }
+  });
+  return count > 0 ? total / count : 0;
+}
+
+// Función para aplicar color según la nota
+function aplicarColor(td, nota) {
+  if (!td) return;
+  td.classList.remove('verde','amarillo','rojo');
+  if (nota >= 4) td.classList.add('verde');
+  else if (nota >= 3) td.classList.add('amarillo');
+  else if (nota > 0) td.classList.add('rojo');
+}
+
+// Función para calcular cada fila de un periodo con pesos fijos (vacío = 0)
+function calcularFila(row) {
+  // Si la fila no tiene inputs, la ignoramos
+  if (!row.querySelector('input')) return;
+
+  let disc = promedioNotas(Array.from(row.querySelectorAll('.disc')));
+  let proc = promedioNotas(Array.from(row.querySelectorAll('.proc')));
+  let acti = promedioNotas(Array.from(row.querySelectorAll('.acti')));
+
+  let autoElem = row.querySelector('.auto');
+  let pruebaElem = row.querySelector('.prueba');
+  let auto = autoElem ? (parseFloat(autoElem.value) || 0) : 0;
+  let prueba = pruebaElem ? (parseFloat(pruebaElem.value) || 0) : 0;
+
+  // Cálculo con pesos fijos
+  let definitiva = (disc * 0.35) + (proc * 0.40) + (acti * 0.10) + (auto * 0.05) + (prueba * 0.10);
+
+  let td = row.querySelector('.notaPeriodo');
+  if (!td) return;
+  td.textContent = definitiva > 0 ? Math.round(definitiva) : "";
+  if (definitiva > 0) aplicarColor(td, Math.round(definitiva));
+}
+
+// Función para calcular notas de todas las filas de periodos
+function calcularTodo() {
+  // Sólo procesamos filas que contienen inputs (las filas de los periodos)
+  document.querySelectorAll('tbody tr').forEach(row => {
+    if (row.querySelector('input')) calcularFila(row);
+  });
+  calcularDefinitiva();
+}
+
+// Función para calcular nota definitiva del año y el resumen
+function calcularDefinitiva() {
+  // Calcular definitivas por estudiante (tabla #definitiva)
+  document.querySelectorAll('#definitiva tbody tr').forEach((row, idx) => {
+    let notas = Array.from(document.querySelectorAll(`.notaPeriodoRow${idx}`));
+    let total = 0, count = 0;
+    notas.forEach(td => {
+      let val = (td && td.textContent) ? td.textContent.trim() : "";
+      if (val !== "") {
+        total += parseFloat(val);
+        count++;
+      }
+    });
+    let def = count > 0 ? (total / count) : 0;
+    let td = row.querySelector('.notaFinal');
+    td.textContent = def > 0 ? Math.round(def) : "";
+    if (def > 0) aplicarColor(td, Math.round(def));
+  });
+
+  // ---- Calcular y llenar el resumen ----
+  document.querySelectorAll('#resumen tbody tr').forEach((row, idx) => {
+    let periodos = Array.from(document.querySelectorAll(`.notaPeriodoRow${idx}`)); // P1..P4 (si existen)
+    let tds = [
+      row.querySelector('.p1'),
+      row.querySelector('.p2'),
+      row.querySelector('.p3'),
+      row.querySelector('.p4'),
+      row.querySelector('.def')
+    ];
+
+    // Colocar notas de periodos en resumen (si hay)
+    periodos.forEach((tdPeriodo, i) => {
+      let val = (tdPeriodo && tdPeriodo.textContent) ? tdPeriodo.textContent.trim() : "";
+      if (tds[i]) {
+        tds[i].textContent = val;
+        if (val !== "") aplicarColor(tds[i], parseFloat(val));
+        else tds[i].classList.remove('verde','amarillo','rojo');
+      }
+    });
+
+    // Si faltan periodos, limpiamos las celdas correspondientes
+    for (let j = periodos.length; j < 4; j++) {
+      if (tds[j]) {
+        tds[j].textContent = "";
+        tds[j].classList.remove('verde','amarillo','rojo');
+      }
+    }
+
+    // Colocar definitiva en resumen
+    let defVal = document.querySelectorAll('#definitiva tbody tr')[idx].querySelector('.notaFinal').textContent;
+    tds[4].textContent = defVal ? defVal : "";
+    if (defVal) aplicarColor(tds[4], parseFloat(defVal));
+    else tds[4].classList.remove('verde','amarillo','rojo');
+  });
+}
+
+// ---------------- FUNCIONES DE GUARDADO ----------------
+
+// Guardar en localStorage
+function guardarNotas() {
+  let datos = {};
+  document.querySelectorAll('input').forEach((inp, idx) => {
+    datos[idx] = inp.value;
+  });
+  localStorage.setItem("notasPlanilla", JSON.stringify(datos));
+  alert("✅ Notas guardadas correctamente.");
+}
+
+// Cargar desde localStorage
+function cargarNotas() {
+  let datos = JSON.parse(localStorage.getItem("notasPlanilla"));
+  if (datos) {
+    document.querySelectorAll('input').forEach((inp, idx) => {
+      if (datos[idx] !== undefined) inp.value = datos[idx];
+      else inp.value = "";
+    });
+    calcularTodo();
+    alert("📂 Notas cargadas.");
+  } else {
+    alert("⚠️ No hay notas guardadas todavía.");
+  }
+}
+
+window.onload = () => {
+  // Los inputs se generan más abajo con document.write, window.onload garantiza que existan
+  document.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', calcularTodo);
+  });
+  // Ejecutar un primer cálculo (por si hay datos en localStorage cargados manualmente)
+  calcularTodo();
+};
+</script>
+
+<h1 style="text-align:center;">Planilla de Notas</h1>
+
+<div class="botones">
+  <button onclick="guardarNotas()">💾 Guardar Notas</button>
+  <button onclick="cargarNotas()">📂 Cargar Notas</button>
+</div>
+
+<script>
+let estudiantes = [
+  "Alejandro Jiménez", "María Torres", "Juan Pérez", "Camila Rojas", "Daniel Gómez",
+  "Sofía Ramírez", "Andrés Herrera", "Valentina López", "Felipe Castro", "Isabella Fernández",
+  "Mateo Vargas", "Lucía Morales", "Tomás Gutiérrez", "Gabriela Suárez", "Samuel Ortega",
+  "Martina Salazar", "Emilio Cárdenas", "Sara Mendoza", "Nicolás Patiño", "Paula Estrada",
+  "David Ospina", "Carolina Mejía", "Julián Castaño", "Laura Restrepo", "Esteban Silva",
+  "Daniela Marín", "Simón Villa", "Mariana Zapata", "Álvaro Torres", "Julieta Cardona"
+];
+
+function generarTabla(periodo) {
+  let html = `<table><caption>Periodo ${periodo}</caption><thead><tr>
+    <th>Estudiante</th>
+    <th colspan=5>Disciplinar</th>
+    <th colspan=5>Procedimental</th>
+    <th colspan=5>Actitudinal</th>
+    <th>Autoevaluación</th>
+    <th>Prueba</th>
+    <th>Nota ${periodo}</th></tr></thead><tbody>`;
+
+  estudiantes.forEach((est, idx) => {
+    html += `<tr><td>${est}</td>`;
+    for (let i=1;i<=5;i++) html += `<td><input type='number' min=0 max=5 step=0.1 class='disc'></td>`;
+    for (let i=1;i<=5;i++) html += `<td><input type='number' min=0 max=5 step=0.1 class='proc'></td>`;
+    for (let i=1;i<=5;i++) html += `<td><input type='number' min=0 max=5 step=0.1 class='acti'></td>`;
+    html += `<td><input type='number' min=0 max=5 step=0.1 class='auto'></td>`;
+    html += `<td><input type='number' min=0 max=5 step=0.1 class='prueba'></td>`;
+    html += `<td class='notaPeriodo notaPeriodoRow${idx}'></td></tr>`;
+  });
+
+  html += `</tbody></table>`;
+  return html;
+}
+
+for (let p=1; p<=4; p++) {
+  document.write(generarTabla(p));
+}
+
+let defHtml = `<table id='definitiva'><caption>Nota Definitiva</caption><thead><tr><th>Estudiante</th><th>Definitiva</th></tr></thead><tbody>`;
+estudiantes.forEach(est => {
+  defHtml += `<tr><td>${est}</td><td class='notaFinal final'></td></tr>`;
+});
+defHtml += `</tbody></table>`;
+document.write(defHtml);
+
+let resumenHtml = `<table id='resumen'><caption>Resumen por Estudiante</caption><thead><tr><th>Estudiante</th><th>P1</th><th>P2</th><th>P3</th><th>P4</th><th>Definitiva</th></tr></thead><tbody>`;
+estudiantes.forEach(est => {
+  resumenHtml += `<tr><td>${est}</td><td class='p1 resumen'></td><td class='p2 resumen'></td><td class='p3 resumen'></td><td class='p4 resumen'></td><td class='def resumen'></td></tr>`;
+});
+resumenHtml += `</tbody></table>`;
+document.write(resumenHtml);
+</script>
+
+</body>
+</html>
